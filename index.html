@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Data Upload</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .upload-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .upload-zone {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            border-radius: 4px;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+
+        .upload-zone:hover {
+            border-color: #666;
+        }
+
+        .table-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header:hover {
+            background-color: #e9ecef;
+        }
+
+        .collapse-icon {
+            font-size: 24px;
+            transition: transform 0.3s ease;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .positive {
+            color: green;
+        }
+
+        .negative {
+            color: red;
+        }
+
+        #summary {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .trades-content {
+            transition: max-height 0.3s ease-out;
+            max-height: 2000px;
+            overflow: auto;
+        }
+
+        .trades-content.collapsed {
+            max-height: 0;
+        }
+
+        .analytics-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .chart-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .metrics-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #0066cc;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h1>Trading Data Upload</h1>
+        <div class="upload-zone" id="dropZone">
+            <p>Drag & Drop your spreadsheet here or click to select</p>
+            <input type="file" id="fileInput" accept=".csv,.xlsx" style="display: none">
+        </div>
+    </div>
+    <div id="summary"></div>
+    
+    <div id="advancedAnalytics" style="display: none;">
+        <div class="metrics-container" id="advancedMetrics"></div>
+        <div class="analytics-container">
+            <div class="chart-container">
+                <canvas id="pnlDistribution"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="cumulativeReturns"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="hourlyHeatmap"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="monthlyPerformance"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header" id="tradesHeader">
+            <h2>Trade List</h2>
+            <span class="collapse-icon">▼</span>
+        </div>
+        <div class="trades-content" id="tradesContent">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Date/Time</th>
+                        <th>Symbol</th>
+                        <th>Description</th>
+                        <th>Strike price</th>
+                        <th>Side</th>
+                        <th>Order type</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Gross P/L</th>
+                        <th>Fee</th>
+                        <th>Net P/L</th>
+                        <th>Trade value</th>
+                        <th>Connection name</th>
+                        <th>Exchange</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const tableBody = document.getElementById('tableBody');
+        const summaryDiv = document.getElementById('summary');
+        const tradesHeader = document.getElementById('tradesHeader');
+        const tradesContent = document.getElementById('tradesContent');
+        const collapseIcon = tradesHeader.querySelector('.collapse-icon');
+
+        // Toggle trades list visibility
+        tradesHeader.addEventListener('click', () => {
+            tradesContent.classList.toggle('collapsed');
+            collapseIcon.classList.toggle('collapsed');
+        });
+
+        // Handle drag and drop events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#666';
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            const file = e.dataTransfer.files[0];
+            processFile(file);
+        });
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            processFile(file);
+        });
+
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                displayData(jsonData);
+                calculateSummary(jsonData);
+                displayAdvancedAnalytics(jsonData);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function displayData(data) {
+            tableBody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                const columns = [
+                    'Account', 'Date/Time', 'Symbol', 'Description', 'Strike price',
+                    'Side', 'Order type', 'Quantity', 'Price', 'Gross P/L',
+                    'Fee', 'Net P/L', 'Trade value', 'Connection name', 'Exchange'
+                ];
+
+                columns.forEach(col => {
+                    const td = document.createElement('td');
+                    let value = row[col] || '';
+                    
+                    if (['Gross P/L', 'Net P/L', 'Trade value'].includes(col) && value !== '') {
+                        const num = parseFloat(value);
+                        td.classList.add(num >= 0 ? 'positive' : 'negative');
+                        value = num.toFixed(2);
+                    }
+                    
+                    td.textContent = value;
+                    tr.appendChild(td);
+                });
+                
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function calculateSummary(data) {
+            const summary = {
+                totalTrades: data.length,
+                totalGrossPL: 0,
+                totalNetPL: 0,
+                totalFees: 0,
+                winningTrades: 0,
+                losingTrades: 0
+            };
+
+            data.forEach(row => {
+                const grossPL = parseFloat(row['Gross P/L']) || 0;
+                const netPL = parseFloat(row['Net P/L']) || 0;
+                const fee = parseFloat(row['Fee']) || 0;
+
+                summary.totalGrossPL += grossPL;
+                summary.totalNetPL += netPL;
+                summary.totalFees += fee;
+
+                if (netPL > 0) summary.winningTrades++;
+                if (netPL < 0) summary.losingTrades++;
+            });
+
+            summaryDiv.innerHTML = `
+                <h2>Trading Summary</h2>
+                <p>Total Trades: ${summary.totalTrades}</p>
+                <p>Gross P/L: <span class="${summary.totalGrossPL >= 0 ? 'positive' : 'negative'}">${summary.totalGrossPL.toFixed(2)}</span></p>
+                <p>Net P/L: <span class="${summary.totalNetPL >= 0 ? 'positive' : 'negative'}">${summary.totalNetPL.toFixed(2)}</span></p>
+                <p>Total Fees: ${summary.totalFees.toFixed(2)}</p>
+                <p>Winning Trades: ${summary.winningTrades}</p>
+                <p>Losing Trades: ${summary.losingTrades}</p>
+                <p>Win Rate: ${((summary.winningTrades / summary.totalTrades) * 100).toFixed(1)}%</p>
+            `;
+        }
+
+        function displayAdvancedAnalytics(data) {
+            const analytics = calculateAdvancedMetrics(data);
+            displayMetricCards(analytics);
+            createCharts(data);
+            document.getElementById('advancedAnalytics').style.display = 'block';
+        }
+
+        function calculateAdvancedMetrics(data) {
+            let returns = [];
+            let previousBalance = 100000; // Assuming initial capital
+            let maxDrawdown = 0;
+            let peakValue = previousBalance;
+
+            data.forEach(trade => {
+                const pnl = parseFloat(trade['Net P/L']) || 0;
+                const currentBalance = previousBalance + pnl;
+                
+                // Calculate return
+                const dailyReturn = (pnl / previousBalance) * 100;
+                returns.push(dailyReturn);
+                
+                // Update drawdown
+                if (currentBalance > peakValue) {
+                    peakValue = currentBalance;
+                } else {
+                    const drawdown = ((peakValue - currentBalance) / peakValue) * 100;
+                    maxDrawdown = Math.max(maxDrawdown, drawdown);
+                }
+                
+                previousBalance = currentBalance;
+            });
+
+            // Calculate Sharpe and Sortino
+            const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+            const stdDev = Math.sqrt(returns.reduce((sq, n) => sq + Math.pow(n - avgReturn, 2), 0) / returns.length);
+            const negReturns = returns.filter(r => r < 0);
+            const negStdDev = Math.sqrt(negReturns.reduce((sq, n) => sq + Math.pow(n - avgReturn, 2), 0) / negReturns.length);
+            
+            const sharpeRatio = (avgReturn / stdDev) * Math.sqrt(252);
+            const sortinoRatio = (avgReturn / negStdDev) * Math.sqrt(252);
+
+            return {
+                sharpeRatio: sharpeRatio.toFixed(2),
+                sortinoRatio: sortinoRatio.toFixed(2),
+                maxDrawdown: maxDrawdown.toFixed(2),
+                returnPct: ((previousBalance - 100000) / 100000 * 100).toFixed(2)
+            };
+        }
+
+        function displayMetricCards(metrics) {
+            const metricsContainer = document.getElementById('advancedMetrics');
+            metricsContainer.innerHTML = `
+                <div class="metric-card">
+                    <h3>Sharpe Ratio</h3>
+                    <div class="metric-value">${metrics.sharpeRatio}</div>
+                </div>
+                <div class="metric-card">
+                    <h3>Sortino Ratio</h3>
+                    <div class="metric-value">${metrics.sortinoRatio}</div>
+                </div>
+                <div class="metric-card">
+                    <h3>Max Drawdown</h3>
+                    <div class="metric-value">${metrics.maxDrawdown}%</div>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Return</h3>
+                    <div class="metric-value">${metrics.returnPct}%</div>
+                </div>
+            `;
+        }
+
+        function createCharts(data) {
+            createPnLDistribution(data);
+            createCumulativeReturns(data);
+            createHourlyHeatmap(data);
+            createMonthlyPerformance(data);
+        }
+
+        function createPnLDistribution(data) {
+            const pnls = data.map(trade => parseFloat(trade['Net P/L']) || 0);
+            const ctx = document.getElementById('pnlDistribution').getContext('2d');
+            
+            // Create bins for histogram
+            const binSize = 100;
+            const bins = {};
+            pnls.forEach(pnl => {
+                const binIndex = Math.floor(pnl / binSize) * binSize;
+                bins[binIndex] = (bins[binIndex] || 0) + 1;
+            });
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(bins),
+                    datasets: [{
+                        label: 'PnL Distribution',
+                        data: Object.values(bins),
+                        backgroundColor: 'rgba(0, 102, 204, 0.5)',
+                        borderColor: 'rgba(0, 102, 204, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'PnL Distribution'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createCumulativeReturns(data) {
+            const cumulativePnL = [];
+            let cumulative = 0;
+            
+            data.forEach(trade => {
+                cumulative += parseFloat(trade['Net P/L']) || 0;
+                cumulativePnL.push(cumulative);
+            });
+
+            const ctx = document.getElementById('cumulativeReturns').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: data.length}, (_, i) => i + 1),
+                    datasets: [{
+                        label: 'Cumulative PnL',
+                        data: cumulativePnL,
+                        borderColor: 'rgba(0, 102, 204, 1)',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Cumulative Returns'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createHourlyHeatmap(data) {
+            const hourlyPnL = Array(24).fill(0);
+            
+            data.forEach(trade => {
+                const hour = new Date(trade['Date/Time']).getHours();
+                hourlyPnL[hour] += parseFloat(trade['Net P/L']) || 0;
+            });
+
+            const ctx = document.getElementById('hourlyHeatmap').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Hourly PnL',
+                        data: hourlyPnL,
+                        backgroundColor: hourlyPnL.map(pnl => 
+                            pnl >= 0 ? 'rgba(0, 102, 204, 0.5)' : 'rgba(204, 0, 0, 0.5)')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Hourly Performance'
+                        }
+                    }
+                }
+            });
+        }
+
+        function createMonthlyPerformance(data) {
+            const monthlyPnL = Array(12).fill(0);
+            
+            data.forEach(trade => {
+                const month = new Date(trade['Date/Time']).getMonth();
+                monthlyPnL[month] += parseFloat(trade['Net P/L']) || 0;
+            });
+
+            const ctx = document.getElementById('monthlyPerformance').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'Monthly PnL',
+                        data: monthlyPnL,
+                        backgroundColor: monthlyPnL.map(pnl => 
+                            pnl >= 0 ? 'rgba(0, 102, 204, 0.5)' : 'rgba(204, 0, 0, 0.5)')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Monthly Performance'
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
